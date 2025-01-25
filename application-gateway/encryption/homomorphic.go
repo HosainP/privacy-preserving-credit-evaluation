@@ -31,11 +31,17 @@ func NewEncryptor() *Encryptor {
 	encoder := bgv.NewEncoder(params)
 	keyGen := rlwe.NewKeyGenerator(params)
 	privateKey, publicKey := keyGen.GenKeyPairNew()
+
+	// relinearization key for after multiplication
+	rlk := keyGen.GenRelinearizationKeyNew(privateKey)
+	evkSet := rlwe.NewMemEvaluationKeySet(rlk)
+	evkSet.RelinearizationKey = rlk
+
 	decryptor := rlwe.NewDecryptor(params, privateKey)
 	encryptorPu := rlwe.NewEncryptor(params, publicKey)
 	encryptorPr := rlwe.NewEncryptor(params, privateKey)
 
-	evaluator := bgv.NewEvaluator(params, nil)
+	evaluator := bgv.NewEvaluator(params, evkSet)
 	return &Encryptor{
 		params:      params,
 		encoder:     encoder,
@@ -120,15 +126,15 @@ func (e *Encryptor) Multiply(cipherText1, cipherText2 *rlwe.Ciphertext) (*rlwe.C
 	if err != nil {
 		return nil, err
 	}
-	//err = e.evaluator.Relinearize(result, result)
-	//if err != nil {
-	//	return nil, err
-	//} // Relinearize to reduce ciphertext size
-	//
-	//err = e.evaluator.Rescale(result, result)
-	//if err != nil {
-	//	return nil, err
-	//} // Rescale to maintain precision
+	err = e.evaluator.Relinearize(result, result)
+	if err != nil {
+		return nil, err
+	} // Relinearize to reduce ciphertext size
+
+	err = e.evaluator.Rescale(result, result)
+	if err != nil {
+		return nil, err
+	} // Rescale to maintain precision
 
 	return result, nil
 }

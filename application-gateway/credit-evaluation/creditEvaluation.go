@@ -18,6 +18,7 @@ func satisfyPreselection(age int, salary int) bool {
 
 const MaxCreditScore = 850
 const MinCreditScore = 300
+const MinDTI = 0.01
 
 const W0 = 0.5
 const W1 = 0.5
@@ -27,8 +28,8 @@ func calcScore(creditScore float64, dti float64) float64 {
 	normalizedCreditScore := (creditScore - MinCreditScore) / (MaxCreditScore - MinCreditScore)
 
 	// Normalize DTI (ensure DTI is not too small)
-	if dti < 0.01 {
-		dti = 0.01
+	if dti < MinDTI {
+		dti = MinDTI
 	}
 
 	score := (W0 * normalizedCreditScore) + (W1 * (1 / dti))

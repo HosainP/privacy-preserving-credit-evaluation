@@ -212,3 +212,53 @@ func (s *SmartContract) GetAllDocumentsByOwner(ctx contractapi.TransactionContex
 func (d *Document) getID() (string, error) {
 	return d.OwnerID + d.Title + d.Time.String(), nil // todo
 }
+
+///////////////////////////////////// users /////////////////////////////////////
+
+type User struct {
+	ID   string `json:"ID"`
+	Name string `json:"Name"`
+
+	CreatedAt   time.Time `json:"Time"`
+	DateOfBirth time.Time `json:"DateOfBirth"`
+
+	GovSignature string `json:"GovSignature"`
+	PublicKey    string `json:"PublicKey"`
+}
+
+func (s *SmartContract) CreateUser(ctx contractapi.TransactionContextInterface, userID string, name string, govSignature string, publicKey string) (string, error) {
+	user := User{
+		ID:           userID,
+		Name:         name,
+		GovSignature: govSignature,
+		PublicKey:    publicKey,
+	}
+
+	userJSON, err := json.Marshal(user)
+	if err != nil {
+		return "", err
+	}
+
+	err = ctx.GetStub().PutState(userID, userJSON)
+	if err != nil {
+		return "", err
+	}
+
+	return user.ID, nil
+}
+
+func (s *SmartContract) ReadUser(ctx contractapi.TransactionContextInterface, userID string) (*User, error) {
+	userJSON, err := ctx.GetStub().GetState(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read from world state: %v", err)
+	}
+	if userJSON == nil {
+		return nil, fmt.Errorf("the user %s does not exist", userID)
+	}
+	var user User
+	err = json.Unmarshal(userJSON, &user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}

@@ -9,6 +9,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"credit-evaluation/application-gateway/encryption"
 	"credit-evaluation/chaincode"
 	"crypto/x509"
 	"encoding/json"
@@ -42,6 +43,7 @@ var assetId = fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
 
 type OrgApplication struct {
 	contract *client.Contract
+	signer   *encryption.Signer
 }
 
 func NewOrgApplication() (*OrgApplication, error) {
@@ -83,19 +85,11 @@ func NewOrgApplication() (*OrgApplication, error) {
 	network := gw.GetNetwork(channelName)
 	contract := network.GetContract(chaincodeName)
 
+	docSignPrKey, err := encryption.GenKey()
 	return &OrgApplication{
 		contract: contract,
+		signer:   encryption.NewSigner(docSignPrKey),
 	}, nil
-}
-
-func testMain() {
-	//orgApplication, _ := NewOrgApplication()
-	//initLedger(orgApplication.contract)
-	//getAllDocuments(orgApplication.contract)
-	//docId := createDocument(orgApplication.contract)
-	//readDocumentByID(orgApplication.contract, docId)
-	//transferAssetAsync(contract)
-	//exampleErrorHandling(contract)
 }
 
 // newGrpcConnection creates a gRPC connection to the Gateway server.
@@ -235,17 +229,32 @@ func (app OrgApplication) CreateDocument(document chaincode.Document) string {
 
 // ReadDocumentByID gets a document by its id from the ledger.
 func (app OrgApplication) ReadDocumentByID(documentId string) (string, error) {
-	fmt.Printf("\n--> Evaluate Transaction: ReadAsset, function returns asset attributes\n")
+	fmt.Printf("\n--> Evaluate Transaction: ReadDocumentByID, function returns document attributes\n")
 
 	evaluateResult, err := app.contract.EvaluateTransaction("ReadDocument", documentId)
 	if err != nil {
-		//panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 		fmt.Println(fmt.Sprintf("failed to read document %s from blockchain %s", documentId, err.Error()))
 		return "", err
 	}
 	result := formatJSON(evaluateResult)
 	fmt.Printf("*** Result:%s\n", result)
 	return result, nil
+}
+
+func (app OrgApplication) ReadDocumentByOwnerId(userId string) (string, error) {
+	evaluateResult, err := app.contract.EvaluateTransaction("GetAllDocumentsByOwner", userId)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("failed to read document %s from blockchain %s", userId, err.Error()))
+		return "", err
+	}
+	result := formatJSON(evaluateResult)
+	fmt.Printf("*** Result:%s\n", result)
+	return result, nil
+}
+
+func (app OrgApplication) GetUserPubKey(userId string) (string, error) {
+	// todo: implement
+	panic("implement me")
 }
 
 // Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing

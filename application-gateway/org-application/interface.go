@@ -24,13 +24,14 @@ func main() {
 			"\n3. put a document on blockchain" +
 			"\n4. get a document from blockchain" +
 			"\n5. get all documents of a person from blockchain" +
-			"\n6. get all documents from blockchain")
+			"\n6. get all documents from blockchain",
+		)
 
 		text, _ := reader.ReadString('\n')
 		text = strings.Replace(text, "\n", "", -1)
 		switch text {
 		case "1": // upload a document
-			document, err := UploadDocument()
+			document, err := UploadDocument(orgApplication)
 			if err != nil {
 				fmt.Println(err)
 				continue
@@ -52,9 +53,15 @@ func main() {
 			fmt.Println(document)
 
 		case "5": // get all documents of a person
-			fmt.Println("5")
+			documents, err := GetDocumentsByOwner(orgApplication)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			fmt.Println(documents)
 
 		case "6": // get all documents from blockchain
+			// TODO: NOT NECESSARY
 			fmt.Println("6")
 
 		default:

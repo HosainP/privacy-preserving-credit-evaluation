@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-func UploadDocument() (chaincode.Document, error) {
+func UploadDocument(application *OrgApplication) (chaincode.Document, error) {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("alright. let's input the document. put the data in a json file and give me the address of the file on your computer." +
 		"\n(use the template to create the document file.)")
@@ -31,6 +31,10 @@ func UploadDocument() (chaincode.Document, error) {
 	}
 
 	fmt.Println(string(data))
+	docData := document.Data
+	for key, value := range docData {
+		docData[key] = value
+	}
 	// todo: encrypt document
 	// todo: sign document
 
@@ -92,4 +96,13 @@ func GetDocumentById(application *OrgApplication) (string, error) {
 		return "", err
 	}
 	return document, nil
+}
+
+func GetDocumentsByOwner(application *OrgApplication) ([]chaincode.Document, error) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("alright. let's input the id of the user.")
+	userId, _ := reader.ReadString('\n')
+	userId = strings.Replace(userId, "\n", "", -1)
+
+	panic("implement me")
 }

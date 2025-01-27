@@ -1,9 +1,18 @@
 package credit_evaluation
 
-import "math"
+import (
+	"math"
+)
 
-const MinSalary = 100 * 1000 * 1000
+const MinSalary = 10 * 1000 * 1000
 const MinAge = 18
+
+const MaxCreditScore = 850
+const MinCreditScore = 300
+const MinDTI = 0.01
+
+const W0 = 0.5
+const W1 = 0.5
 
 func CreditEvaluation(age int, salary int, creditScore float64, dti float64) float64 {
 	if !satisfyPreselection(age, salary) {
@@ -15,13 +24,6 @@ func CreditEvaluation(age int, salary int, creditScore float64, dti float64) flo
 func satisfyPreselection(age int, salary int) bool {
 	return salary > MinSalary && age > MinAge
 }
-
-const MaxCreditScore = 850
-const MinCreditScore = 300
-const MinDTI = 0.01
-
-const W0 = 0.5
-const W1 = 0.5
 
 func calcScore(creditScore float64, dti float64) float64 {
 	// Normalize credit score
@@ -39,3 +41,5 @@ func calcScore(creditScore float64, dti float64) float64 {
 func sigmoid(x float64) float64 {
 	return 1 / (1 + math.Exp(-x))
 }
+
+/////////////////////// homomorphic

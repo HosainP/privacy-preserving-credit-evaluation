@@ -87,6 +87,12 @@ github.com/rogpeppe/go-internal/modfile
 ## explicit; go 1.17
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
+# github.com/tuneinsight/lattigo/v4 v4.1.1
+## explicit; go 1.13
+github.com/tuneinsight/lattigo/v4/ring
+github.com/tuneinsight/lattigo/v4/rlwe
+github.com/tuneinsight/lattigo/v4/rlwe/ringqp
+github.com/tuneinsight/lattigo/v4/utils
 # github.com/tuneinsight/lattigo/v6 v6.1.0
 ## explicit; go 1.21
 github.com/tuneinsight/lattigo/v6/core/rlwe

@@ -6,6 +6,7 @@ require (
 	github.com/hyperledger/fabric-contract-api-go/v2 v2.0.0
 	github.com/hyperledger/fabric-gateway v1.7.0
 	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.4
+	github.com/tuneinsight/lattigo/v4 v4.1.1
 	github.com/tuneinsight/lattigo/v6 v6.1.0
 	google.golang.org/grpc v1.67.1
 )

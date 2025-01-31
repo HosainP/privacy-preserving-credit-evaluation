@@ -2,6 +2,7 @@ package main
 
 import (
 	credit_evaluation "credit-evaluation/application-gateway/credit-evaluation"
+	"credit-evaluation/application-gateway/encryption"
 	"encoding/csv"
 	"fmt"
 	"os"
@@ -9,7 +10,7 @@ import (
 	"time"
 )
 
-func processCSV(filename string) error {
+func processCSV2(filename string, helper *encryption.CKKSHelper) error {
 	file, err := os.Open(filename)
 	if err != nil {
 		return err
@@ -31,7 +32,7 @@ func processCSV(filename string) error {
 	writer := csv.NewWriter(outputFile)
 	defer writer.Flush()
 
-	headers := append(records[0], "Raw Evaluation Score", "Raw Evaluation Result", "Evaluation Time (ms)")
+	headers := append(records[0], "Encrypted Evaluation Score", "Encrypted Evaluation Result", "Evaluation Time (ms)")
 	if err := writer.Write(headers); err != nil {
 		return err
 	}
@@ -47,14 +48,21 @@ func processCSV(filename string) error {
 			return err
 		}
 
+		// Encrypt credit score and DTI
+		creditScoreEnc := helper.EncryptPu(float64(creditScore))
+		dtiEnc := helper.EncryptPu(dti)
+
 		start := time.Now()
-		score := credit_evaluation.CreditEvaluation(19, 100*1000*1000+1, float64(creditScore), dti)
+		// Perform homomorphic credit evaluation
+		resultEnc, _ := helper.CreditEvaluation(helper, nil, nil, creditScoreEnc, dtiEnc)
+
+		// Decrypt the result
+		score := helper.Decrypt(resultEnc)
 		elapsed := time.Since(start).Milliseconds()
 
 		result := credit_evaluation.Sigmoid(score)
 
-		newRecord := append(
-			record,
+		newRecord := append(record,
 			strconv.FormatFloat(score, 'f', 2, 64),
 			strconv.FormatFloat(result, 'f', 2, 64),
 			strconv.FormatInt(elapsed, 10),
@@ -70,9 +78,10 @@ func processCSV(filename string) error {
 	return nil
 }
 
-func main() {
+func mains() {
+	helper := encryption.NewCKKSHelper()
 	filename := "./test/credit-evaluation-test/credit_evaluation_test_data.csv"
-	if err := processCSV(filename); err != nil {
+	if err := processCSV2(filename, helper); err != nil {
 		panic(err)
 	}
 

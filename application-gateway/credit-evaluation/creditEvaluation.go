@@ -35,10 +35,10 @@ func calcScore(creditScore float64, dti float64) float64 {
 	}
 
 	score := (W0 * normalizedCreditScore) + (W1 * (1 / dti))
-	return sigmoid(score)
+	return score
 }
 
-func sigmoid(x float64) float64 {
+func Sigmoid(x float64) float64 {
 	return 1 / (1 + math.Exp(-x))
 }
 

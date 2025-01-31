@@ -47,8 +47,8 @@ func saveToCSV(data [][]string, filename string) error {
 	return nil
 }
 
-func main2() {
-	testData := generateTestData(500)
+func mai() {
+	testData := generateTestData(200)
 
 	filename := "./test/credit-evaluation-test/credit_evaluation_test_data.csv"
 	if err := saveToCSV(testData, filename); err != nil {

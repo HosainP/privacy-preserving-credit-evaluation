@@ -37,9 +37,9 @@ func TestCalcScore(t *testing.T) {
 		dti         float64
 		want        float64
 	}{
-		{"High Credit Score, Low DTI", 800, 0.2, sigmoid(W0*(800-MinCreditScore)/(MaxCreditScore-MinCreditScore) + W1*(1/0.2))},
-		{"Low Credit Score, High DTI", 500, 0.6, sigmoid(W0*(500-MinCreditScore)/(MaxCreditScore-MinCreditScore) + W1*(1/0.6))},
-		{"Minimum Credit Score, Maximum DTI", 300, 1.0, sigmoid(W0*(300-MinCreditScore)/(MaxCreditScore-MinCreditScore) + W1*(1/1.0))},
+		{"High Credit Score, Low DTI", 800, 0.2, Sigmoid(W0*(800-MinCreditScore)/(MaxCreditScore-MinCreditScore) + W1*(1/0.2))},
+		{"Low Credit Score, High DTI", 500, 0.6, Sigmoid(W0*(500-MinCreditScore)/(MaxCreditScore-MinCreditScore) + W1*(1/0.6))},
+		{"Minimum Credit Score, Maximum DTI", 300, 1.0, Sigmoid(W0*(300-MinCreditScore)/(MaxCreditScore-MinCreditScore) + W1*(1/1.0))},
 	}
 
 	for _, tt := range tests {
@@ -67,7 +67,7 @@ func TestSigmoid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sigmoid(tt.x)
+			got := Sigmoid(tt.x)
 			if got != tt.want {
 				t.Errorf("sigmoid(%f) = %f, want %f", tt.x, got, tt.want)
 			}

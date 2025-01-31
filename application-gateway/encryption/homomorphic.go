@@ -1,355 +1,320 @@
 package encryption
 
 import (
-	credit_evaluation "credit-evaluation/application-gateway/credit-evaluation"
 	"fmt"
-	"github.com/tuneinsight/lattigo/v6/core/rlwe"
-	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
+	"github.com/tuneinsight/lattigo/v4/ckks"
+	"github.com/tuneinsight/lattigo/v4/rlwe"
 )
 
-var bgvParams = bgv.ParametersLiteral{
-	LogN:             14,
-	LogQ:             []int{56, 55, 55, 54, 54, 54},
-	LogP:             []int{55, 55},
-	PlaintextModulus: 0x3ee0001,
+// CKKSHelper encapsulates CKKS parameters, keys, and operations
+type CKKSHelper struct {
+	Params       ckks.Parameters
+	Encoder      ckks.Encoder
+	EncryptorPu  rlwe.Encryptor
+	EncryptorPr  rlwe.Encryptor
+	Decryptor    rlwe.Decryptor
+	Evaluator    ckks.Evaluator
+	Relinearizer *rlwe.RelinearizationKey
+	LogSlots     int
+	Scale        rlwe.Scale
+	secretKey    *rlwe.SecretKey
 }
 
-type Encryptor struct {
-	params      bgv.Parameters
-	encoder     *bgv.Encoder
-	decryptor   *rlwe.Decryptor
-	encryptorPu *rlwe.Encryptor
-	encryptorPr *rlwe.Encryptor
-	evaluator   *bgv.Evaluator
-	privateKey  *rlwe.SecretKey
-}
-
-func NewEncryptor() *Encryptor {
-	params, err := bgv.NewParametersFromLiteral(bgvParams)
+// NewCKKSHelper initializes a CKKSHelper instance
+func NewCKKSHelper() *CKKSHelper {
+	// Create CKKS parameters (using default parameter set PN12QP109)
+	params, err := ckks.NewParametersFromLiteral(ckks.PN14QP438)
 	if err != nil {
 		panic(err)
 	}
 
-	encoder := bgv.NewEncoder(params)
-	keyGen := rlwe.NewKeyGenerator(params)
-	privateKey, publicKey := keyGen.GenKeyPairNew()
+	// Generate keys
+	kgen := ckks.NewKeyGenerator(params)
+	sk, pk := kgen.GenKeyPair()
+	rlk := kgen.GenRelinearizationKey(sk, 1)
 
-	// relinearization key for after multiplication
-	rlk := keyGen.GenRelinearizationKeyNew(privateKey)
-	evkSet := rlwe.NewMemEvaluationKeySet(rlk)
-	evkSet.RelinearizationKey = rlk
-
-	decryptor := rlwe.NewDecryptor(params, privateKey)
-	encryptorPu := rlwe.NewEncryptor(params, publicKey)
-	encryptorPr := rlwe.NewEncryptor(params, privateKey)
-
-	evaluator := bgv.NewEvaluator(params, evkSet)
-	return &Encryptor{
-		params:      params,
-		encoder:     encoder,
-		decryptor:   decryptor,
-		encryptorPu: encryptorPu,
-		encryptorPr: encryptorPr,
-		evaluator:   evaluator,
-		privateKey:  privateKey,
+	// Return the helper instance
+	return &CKKSHelper{
+		Params:       params,
+		Encoder:      ckks.NewEncoder(params),
+		EncryptorPu:  ckks.NewEncryptor(params, pk),
+		EncryptorPr:  ckks.NewEncryptor(params, sk),
+		Decryptor:    ckks.NewDecryptor(params, sk),
+		Evaluator:    ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk}),
+		Relinearizer: rlk,
+		LogSlots:     params.LogSlots(),
+		Scale:        params.DefaultScale(),
+		secretKey:    sk,
 	}
 }
 
-func (e *Encryptor) EncryptPu(data int64) (*rlwe.Ciphertext, error) {
-	slice := []int64{data}
-	plainText := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	if err := e.encoder.Encode(slice, plainText); err != nil {
-		fmt.Printf("failed to encode data: %v", err)
-		return nil, err
-	}
+// EncryptPu Encrypt encodes and encrypts a value into a ciphertext
+func (c *CKKSHelper) EncryptPu(value float64) *rlwe.Ciphertext {
+	// Encode the value into a plaintext
+	values := []complex128{complex(value, 0)} // Single value in slot
+	plaintext := c.Encoder.EncodeNew(values, c.Params.MaxLevel(), c.Scale, c.LogSlots)
 
-	cipherText, err := e.encryptorPu.EncryptNew(plainText)
-	if err != nil {
-		fmt.Printf("failed to encrypt data: %v", err)
-		return nil, err
-	}
-
-	return cipherText, nil
+	// Encrypt the plaintext
+	return c.EncryptorPu.EncryptNew(plaintext)
 }
 
-func (e *Encryptor) EncryptPr(data int64) (*rlwe.Ciphertext, error) {
-	slice := []int64{data}
-	plainText := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	if err := e.encoder.Encode(slice, plainText); err != nil {
-		fmt.Printf("failed to encode data: %v", err)
-		return nil, err
-	}
+// EncryptPr Encrypt encodes and encrypts a value into a ciphertext
+func (c *CKKSHelper) EncryptPr(value float64) *rlwe.Ciphertext {
+	// Encode the value into a plaintext
+	values := []complex128{complex(value, 0)} // Single value in slot
+	plaintext := c.Encoder.EncodeNew(values, c.Params.MaxLevel(), c.Scale, c.LogSlots)
 
-	cipherText, err := e.encryptorPr.EncryptNew(plainText)
-	if err != nil {
-		fmt.Printf("failed to encrypt data: %v", err)
-		return nil, err
-	}
-
-	return cipherText, nil
+	// Encrypt the plaintext
+	return c.EncryptorPr.EncryptNew(plaintext)
 }
 
-func (e *Encryptor) Decrypt(cipherText *rlwe.Ciphertext) (int64, error) {
-	plainText := e.decryptor.DecryptNew(cipherText)
+// Decrypt decrypts a ciphertext using the default secret key and decodes it
+func (c *CKKSHelper) Decrypt(ciphertext *rlwe.Ciphertext) float64 {
+	// Decrypt the ciphertext into a plaintext
+	plaintext := c.Decryptor.DecryptNew(ciphertext)
 
-	result := make([]int64, e.params.N())
-	err := e.encoder.Decode(plainText, result)
-	if err != nil {
-		return -1, err
-	}
+	// Decode the plaintext to retrieve the value
+	decoded := c.Encoder.Decode(plaintext, c.LogSlots)
 
-	return result[0], nil
+	// Return the real part of the first slot
+	return real(decoded[0])
 }
 
-func (e *Encryptor) DecryptWithKey(cipherText *rlwe.Ciphertext, privateKey *rlwe.SecretKey) (int64, error) {
-	decryptor := rlwe.NewDecryptor(e.params, privateKey)
-	plainText := decryptor.DecryptNew(cipherText)
+// DecryptWithKey decrypts a ciphertext using a provided secret key and decodes it
+func (c *CKKSHelper) DecryptWithKey(ciphertext *rlwe.Ciphertext, secretKey *rlwe.SecretKey) float64 {
+	// Create a decryptor with the provided secret key
+	decryptor := ckks.NewDecryptor(c.Params, secretKey)
 
-	result := make([]int64, e.params.N())
-	err := e.encoder.Decode(plainText, result)
-	if err != nil {
-		return -1, err
-	}
+	// Decrypt the ciphertext into a plaintext
+	plaintext := decryptor.DecryptNew(ciphertext)
 
-	return result[0], nil
+	// Decode the plaintext to retrieve the value
+	decoded := c.Encoder.Decode(plaintext, c.LogSlots)
+
+	// Return the real part of the first slot
+	return real(decoded[0])
 }
 
-// Add performs homomorphic addition on two ciphertexts.
-func (e *Encryptor) Add(cipherText1, cipherText2 *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	result, err := e.evaluator.AddNew(cipherText1, cipherText2)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+// Add adds two ciphertexts and returns the result
+func (c *CKKSHelper) Add(ct1, ct2 *rlwe.Ciphertext) *rlwe.Ciphertext {
+	// Create a new ciphertext to store the result
+	result := ckks.NewCiphertext(c.Params, 1, ct1.Level())
+
+	// Perform the addition
+	c.Evaluator.Add(ct1, ct2, result)
+
+	return result
 }
 
-// Multiply performs homomorphic multiplication on two ciphertexts.
-func (e *Encryptor) Multiply(cipherText1, cipherText2 *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	result, err := e.evaluator.MulNew(cipherText1, cipherText2)
-	if err != nil {
-		return nil, err
-	}
-	err = e.evaluator.Relinearize(result, result)
-	if err != nil {
-		return nil, err
-	} // Relinearize to reduce ciphertext size
+// AddWithPlain adds a ciphertext with a plaintext and returns the result
+func (c *CKKSHelper) AddWithPlain(ct *rlwe.Ciphertext, value float64) *rlwe.Ciphertext {
+	// Encode the value into a plaintext
+	values := []complex128{complex(value, 0)} // Single value in slot
+	plaintext := c.Encoder.EncodeNew(values, ct.Level(), c.Scale, c.LogSlots)
 
-	err = e.evaluator.Rescale(result, result)
-	if err != nil {
-		return nil, err
-	} // Rescale to maintain precision
+	// Create a new ciphertext to store the result
+	result := ckks.NewCiphertext(c.Params, 1, ct.Level())
 
-	return result, nil
+	// Perform the addition
+	c.Evaluator.Add(ct, plaintext, result)
+
+	// Rescale the result to maintain the correct scale
+	c.Evaluator.Rescale(result, c.Scale, result)
+
+	return result
 }
 
-// MultiplyWithPlain multiplies a ciphertext with a plaintext number.
-func (e *Encryptor) MultiplyWithPlain(cipherText *rlwe.Ciphertext, plainNumber int64) (*rlwe.Ciphertext, error) {
-	// Encode the plaintext number into a BGV plaintext
-	plainText := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	slice := []int64{plainNumber}
-	if err := e.encoder.Encode(slice, plainText); err != nil {
-		fmt.Printf("failed to encode plaintext number: %v\n", err)
-		return nil, err
-	}
+// Multiply multiplies two ciphertexts and returns the result
+func (c *CKKSHelper) Multiply(ct1, ct2 *rlwe.Ciphertext) *rlwe.Ciphertext {
+	// Create a new ciphertext to store the result
+	result := ckks.NewCiphertext(c.Params, 1, ct1.Level())
 
-	// Perform homomorphic multiplication
-	result, err := e.evaluator.MulNew(cipherText, plainText)
-	if err != nil {
-		fmt.Printf("failed to multiply ciphertext with plaintext: %v\n", err)
-		return nil, err
-	}
+	// Perform the multiplication
+	c.Evaluator.MulRelin(ct1, ct2, result)
 
-	// Rescale to maintain precision (if needed by your parameters)
-	err = e.evaluator.Rescale(result, result)
-	if err != nil {
-		fmt.Printf("failed to rescale result: %v\n", err)
-		return nil, err
-	}
+	// Rescale the result to maintain the correct scale
+	c.Evaluator.Rescale(result, c.Scale, result)
 
-	return result, nil
+	return result
 }
 
-// DivideByPlain performs homomorphic division of a ciphertext by a plaintext number.
-func (e *Encryptor) DivideByPlain(cipherText *rlwe.Ciphertext, plainNumber int64) (*rlwe.Ciphertext, error) {
-	// Encode the plaintext number into a BGV plaintext
-	plainText := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	slice := []int64{plainNumber}
-	if err := e.encoder.Encode(slice, plainText); err != nil {
-		fmt.Printf("failed to encode plaintext number: %v\n", err)
-		return nil, err
-	}
+// MultiplyPlain multiplies a ciphertext by a plaintext and returns the result
+func (c *CKKSHelper) MultiplyPlain(ct *rlwe.Ciphertext, value float64) *rlwe.Ciphertext {
+	// Encode the value into a plaintext
+	values := []complex128{complex(value, 0)} // Single value in slot
+	plaintext := c.Encoder.EncodeNew(values, ct.Level(), c.Scale, c.LogSlots)
 
-	// Compute the multiplicative inverse of the plaintext number
-	// This is required because homomorphic encryption typically supports multiplication and not division.
-	// In the case of plaintexts, we multiply by the inverse of the plaintext number.
-	// For example, dividing by 2 is equivalent to multiplying by 1/2.
+	// Create a new ciphertext to store the result
+	result := ckks.NewCiphertext(c.Params, 1, ct.Level())
 
-	// Let's assume plainNumber is non-zero. The inverse of plainNumber in homomorphic encryption is calculated here.
-	inversePlainText := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	e.encoder.Encode([]int64{1 / plainNumber}, inversePlainText)
+	// Perform the multiplication
+	c.Evaluator.Mul(ct, plaintext, result)
 
-	// Perform homomorphic multiplication with the inverse of the plaintext number.
-	result, err := e.evaluator.MulNew(cipherText, inversePlainText)
-	if err != nil {
-		fmt.Printf("failed to divide ciphertext by plaintext: %v\n", err)
-		return nil, err
-	}
+	// Rescale the result to maintain the correct scale
+	c.Evaluator.Rescale(result, c.Scale, result)
 
-	// Rescale to maintain precision (if needed by your parameters)
-	err = e.evaluator.Rescale(result, result)
-	if err != nil {
-		fmt.Printf("failed to rescale result: %v\n", err)
-		return nil, err
-	}
-
-	return result, nil
+	return result
 }
 
-// Credit evaluation functions
+// DivideByPlain divides a ciphertext by a plaintext value
+func (c *CKKSHelper) DivideByPlain(ct *rlwe.Ciphertext, value float64) *rlwe.Ciphertext {
+	// Compute the reciprocal of the plaintext value
+	reciprocal := 1.0 / value
 
-// HomomorphicCreditEvaluation performs the credit evaluation using homomorphic encryption.
-func (e *Encryptor) HomomorphicCreditEvaluation(age, salary, creditScore, dti *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	// Step 1: Check if the preselection criteria are satisfied (age > MinAge and salary > MinSalary)
-	isEligible, err := e.HomomorphicSatisfyPreselection(age, salary)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check preselection: %v", err)
-	}
-
-	// If not eligible, return an encrypted -1
-	if !isEligible {
-		// Encrypt -1 to return as the result
-		return e.EncryptPu(int64(-1))
-	}
-
-	// Step 2: Calculate the homomorphic score if preselection is passed
-	encryptedScore, err := e.HomomorphicCalcScore(creditScore, dti)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate homomorphic score: %v", err)
-	}
-
-	// Step 3: Return the encrypted score
-	return encryptedScore, nil
+	// Multiply the ciphertext by the reciprocal
+	return c.MultiplyPlain(ct, reciprocal)
 }
 
-// HomomorphicSatisfyPreselection checks if the age and salary satisfy the preselection conditions.
-func (e *Encryptor) HomomorphicSatisfyPreselection(age, salary *rlwe.Ciphertext) (bool, error) {
-	// Define constants for the preselection checks
-	MinAge := credit_evaluation.MinAge
-	MinSalary := credit_evaluation.MinSalary
+// Divide divides two ciphertexts (ct1 / ct2)
+func (c *CKKSHelper) Divide(ct1, ct2 *rlwe.Ciphertext) *rlwe.Ciphertext {
+	// Decrypt ct2 to get the divisor value
+	divisor := c.Decrypt(ct2)
 
-	// Convert MinAge and MinSalary to plaintext
-	minAgePlain := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	e.encoder.Encode([]int64{int64(MinAge)}, minAgePlain)
+	// Compute the reciprocal of the divisor
+	reciprocal := 1.0 / divisor
 
-	minSalaryPlain := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	e.encoder.Encode([]int64{int64(MinSalary)}, minSalaryPlain)
-
-	// Compare salary with MinSalary: salary > MinSalary
-	salaryDiff, err := e.evaluator.SubNew(salary, minSalaryPlain)
-	if err != nil {
-		return false, fmt.Errorf("failed to subtract MinSalary from salary: %v", err)
-	}
-
-	// Compare age with MinAge: age > MinAge
-	ageDiff, err := e.evaluator.SubNew(age, minAgePlain)
-	if err != nil {
-		return false, fmt.Errorf("failed to subtract MinAge from age: %v", err)
-	}
-
-	// Now we check if the results are greater than zero using homomorphic operations.
-	// This step depends on how your homomorphic encryption library handles comparisons.
-	// A common approach is to check whether the resulting ciphertext is non-negative.
-
-	// In a homomorphic setting, we would ideally need a function to "extract" or "check" if the result is positive.
-	// We simulate this by simply comparing the decrypted result of `ageDiff` and `salaryDiff` to see if both are positive.
-
-	// Decrypting and checking (for testing purposes)
-	ageResult, err := e.Decrypt(ageDiff)
-	if err != nil {
-		return false, fmt.Errorf("failed to decrypt ageDiff: %v", err)
-	}
-
-	salaryResult, err := e.Decrypt(salaryDiff)
-	if err != nil {
-		return false, fmt.Errorf("failed to decrypt salaryDiff: %v", err)
-	}
-
-	// Check if both conditions are satisfied
-	if ageResult > 0 && salaryResult > 0 {
-		return true, nil
-	}
-
-	return false, nil
+	// Multiply ct1 by the reciprocal
+	return c.MultiplyPlain(ct1, reciprocal)
 }
 
-// HomomorphicCalcScore calculates the score based on the encrypted credit score and DTI.
-func (e *Encryptor) HomomorphicCalcScore(creditScore, dti *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	panic("implement me")
+// //////////////////////////////////// CREDIT EVALUATION ////////////////////////////////////////////
+
+const MinSalary = 10 * 1000 * 1000
+const MinAge = 18
+
+const MaxCreditScore = 850
+const MinCreditScore = 300
+const MinDTI = 0.01
+
+const W0 = 0.5
+const W1 = 0.5
+
+// CreditEvaluation evaluates credit eligibility using encrypted inputs
+func (c *CKKSHelper) CreditEvaluation(helper *CKKSHelper, ageCiphertext *rlwe.Ciphertext, salaryCiphertext *rlwe.Ciphertext, creditScoreCiphertext *rlwe.Ciphertext, dtiCiphertext *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
+	// Check preselection (age and salary)
+	//preselectionResult := satisfyPreselection(helper, ageCiphertext, salaryCiphertext)
+
+	// If preselection fails, return an invalid result
+	//if helper.Decrypt(preselectionResult) == 0 {
+	//	return helper.EncryptPu(-1), nil
+	//}
+
+	// Calculate the credit score
+	scoreCiphertext := c.calcScore(helper, creditScoreCiphertext, dtiCiphertext)
+
+	// Apply sigmoid to the score
+	//resultCiphertext := sigmoid(helper, scoreCiphertext)
+
+	return scoreCiphertext, nil
 }
 
-// HomomorphicSigmoid approximates the sigmoid function homomorphically using a cubic polynomial: a_0 + a_1*x + a_2*x^3.
-func (e *Encryptor) HomomorphicSigmoid(x *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	// Coefficients for the cubic polynomial approximation of the sigmoid
-	a0 := int64(0)      // Constant term
-	a1 := int64(1)      // Linear term coefficient
-	a2 := int64(-1)     // Cubic term coefficient (inverted for simplicity)
-	scale := int64(100) // Scaling factor for better precision
+// satisfyPreselection checks if age and salary meet the minimum requirements
+//func (c *CKKSHelper) satisfyPreselection(helper *CKKSHelper, ageCiphertext *rlwe.Ciphertext, salaryCiphertext *rlwe.Ciphertext) *rlwe.Ciphertext {
+//	// Encrypt the minimum age and salary
+//	minAgeCiphertext := helper.EncryptPu(float64(MinAge))
+//	minSalaryCiphertext := helper.EncryptPu(float64(MinSalary))
+//
+//	// Compare age and salary with minimums
+//	ageCheck := helper.Evaluator.SubNew(ageCiphertext, minAgeCiphertext)
+//	salaryCheck := helper.Evaluator.SubNew(salaryCiphertext, minSalaryCiphertext)
+//
+//	// Check if both conditions are met (age > MinAge AND salary > MinSalary)
+//	ageCheck = helper.Evaluator.IsGreaterThan(ageCheck, helper.EncryptPu(0))
+//	salaryCheck = helper.Evaluator.IsGreaterThan(salaryCheck, helper.EncryptPu(0))
+//
+//	// Combine results using multiplication (logical AND)
+//	result := helper.Evaluator.MulRelinNew(ageCheck, salaryCheck)
+//	helper.Evaluator.Rescale(result, helper.Scale, result)
+//
+//	return result
+//}
 
-	// Encode coefficients as plaintexts
-	a0Plain := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	a1Plain := bgv.NewPlaintext(e.params, e.params.MaxLevel())
-	a2Plain := bgv.NewPlaintext(e.params, e.params.MaxLevel())
+// calcScore calculates the credit score using normalized credit score and DTI
+func (c *CKKSHelper) calcScore(helper *CKKSHelper, creditScoreCiphertext *rlwe.Ciphertext, dtiCiphertext *rlwe.Ciphertext) *rlwe.Ciphertext {
+	// Normalize credit score
+	minCreditScoreCiphertext := helper.EncryptPu(MinCreditScore)
+	maxCreditScoreCiphertext := helper.EncryptPu(MaxCreditScore)
+	normalizedCreditScore := helper.Evaluator.SubNew(creditScoreCiphertext, minCreditScoreCiphertext)
+	normalizedCreditScore = helper.Divide(normalizedCreditScore, helper.Evaluator.SubNew(maxCreditScoreCiphertext, minCreditScoreCiphertext))
 
-	e.encoder.Encode([]int64{a0 * scale}, a0Plain)
-	e.encoder.Encode([]int64{a1 * scale}, a1Plain)
-	e.encoder.Encode([]int64{a2 * scale}, a2Plain)
+	// Normalize DTI (ensure DTI is not too small)
+	//minDTICiphertext := helper.EncryptPu(MinDTI)
+	//dtiCiphertext = helper.Evaluator.MaxNew(dtiCiphertext, minDTICiphertext)
 
-	// Scale input ciphertext
-	scaledX, err := e.MultiplyWithPlain(x, scale)
-	if err != nil {
-		return nil, fmt.Errorf("failed to scale input: %v", err)
-	}
+	// Calculate the score: (W0 * normalizedCreditScore) + (W1 * (1 / dti))
+	w0Ciphertext := helper.EncryptPu(W0)
+	w1Ciphertext := helper.EncryptPu(W1)
 
-	// Compute x^3
-	x2, err := e.Multiply(scaledX, scaledX) // x^2
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute x^2: %v", err)
-	}
+	term1 := helper.Evaluator.MulRelinNew(normalizedCreditScore, w0Ciphertext)
+	fmt.Println("1", c.Decrypt(term1))
+	helper.Evaluator.Rescale(term1, helper.Scale, term1)
+	fmt.Println("2", c.Decrypt(term1))
 
-	x3, err := e.Multiply(x2, scaledX) // x^3
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute x^3: %v", err)
-	}
+	term2, _ := helper.Evaluator.InverseNew(dtiCiphertext, 5)
+	term2 = helper.Evaluator.MulRelinNew(term2, w1Ciphertext)
+	fmt.Println("3", c.Decrypt(term2))
+	helper.Evaluator.Rescale(term2, helper.Scale, term2)
+	fmt.Println("4", c.Decrypt(term2))
 
-	// Compute a2 * x^3
-	a2x3, err := e.evaluator.MulNew(x3, a2Plain)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute a2 * x^3: %v", err)
-	}
+	scoreCiphertext := helper.Add(term1, term2)
+	fmt.Println("5", c.Decrypt(scoreCiphertext))
 
-	// Compute a1 * x
-	a1x, err := e.evaluator.MulNew(scaledX, a1Plain)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute a1 * x: %v", err)
-	}
+	return scoreCiphertext
+}
 
-	// Add a2 * x^3 + a1 * x
-	polyResult, err := e.evaluator.AddNew(a1x, a2x3)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add a1 * x and a2 * x^3: %v", err)
-	}
+// sigmoid applies the sigmoid function to the input ciphertext
+func (c *CKKSHelper) sigmoid(helper *CKKSHelper, xCiphertext *rlwe.Ciphertext) *rlwe.Ciphertext {
+	// Compute sigmoid(x) = 1 / (1 + exp(-x))
 
-	// Add a0 to the result
-	finalResult, err := e.evaluator.AddNew(polyResult, a0Plain)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add a0: %v", err)
-	}
+	// Step 1: Negate x
+	negXCiphertext := helper.Evaluator.NegNew(xCiphertext)
 
-	// Rescale to match the original scale (optional based on parameters)
-	err = e.evaluator.Rescale(finalResult, finalResult)
-	if err != nil {
-		return nil, fmt.Errorf("failed to rescale final result: %v", err)
-	}
+	// Step 2: Approximate exp(-x) using Taylor series:
+	// exp(-x) ≈ 1 - x + x^2/2 - x^3/6 + x^4/24 - x^5/120
 
-	return finalResult, nil
+	x2 := helper.Multiply(negXCiphertext, negXCiphertext)
+	fmt.Println(c.Decrypt(negXCiphertext))
+	fmt.Println(c.Decrypt(x2))
+	x3 := helper.Multiply(x2, negXCiphertext)
+	fmt.Println(c.Decrypt(x3))
+	//x4 := helper.Multiply(x3, negXCiphertext)
+	//x5 := helper.Multiply(x4, negXCiphertext)
+
+	term0 := helper.EncryptPu(1.0) // 1
+	fmt.Println("term0", c.Decrypt(term0))
+
+	term1 := helper.MultiplyPlain(negXCiphertext, 1.0) // -x
+	fmt.Println("term1", c.Decrypt(term1))
+
+	term2 := helper.MultiplyPlain(x2, 1.0/2.0) // x^2 / 2
+	fmt.Println("term2", c.Decrypt(term2))
+
+	term3 := helper.MultiplyPlain(x3, 1.0/6.0) // -x^3 / 6
+	fmt.Println("term3", c.Decrypt(term3))
+
+	//term4 := helper.MultiplyPlain(x4, 1.0/24.0) // x^4 / 24
+	//fmt.Println("term4", c.Decrypt(term4))
+	//
+	//term5 := helper.MultiplyPlain(x5, -1.0/120.0) // -x^5 / 120
+	//fmt.Println("term5", c.Decrypt(term5))
+
+	// Sum up the terms for exp(-x)
+	expNegXCiphertext := helper.Add(term0, term1)
+	fmt.Println(c.Decrypt(expNegXCiphertext))
+	expNegXCiphertext = helper.Add(expNegXCiphertext, term2)
+	fmt.Println(c.Decrypt(expNegXCiphertext))
+	expNegXCiphertext = helper.Add(expNegXCiphertext, term3)
+	fmt.Println(c.Decrypt(expNegXCiphertext))
+	//expNegXCiphertext = helper.Evaluator.AddNew(expNegXCiphertext, term4)
+	//fmt.Println(c.Decrypt(expNegXCiphertext))
+	//expNegXCiphertext = helper.Evaluator.AddNew(expNegXCiphertext, term5)
+	//fmt.Println(c.Decrypt(expNegXCiphertext))
+
+	// Step 3: Compute 1 + exp(-x)
+	result := helper.AddWithPlain(expNegXCiphertext, 1)
+	fmt.Println("result", c.Decrypt(result))
+	// Step 4: Inverse of the denominator: 1 / (1 + exp(-x))
+	//result, _ := helper.Evaluator.InverseNew(denominator, 5) // use 5 as the precision of the approximation
+
+	return result
 }

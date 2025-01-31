@@ -31,7 +31,10 @@ func processCSV(filename string) error {
 	writer := csv.NewWriter(outputFile)
 	defer writer.Flush()
 
-	headers := append(records[0], "Raw Evaluation Score", "Raw Evaluation Result", "Evaluation Time (ms)")
+	headers := append(records[0],
+		"Raw Evaluation Score",
+		"Raw Evaluation Result",
+		"Evaluation Time (ns)")
 	if err := writer.Write(headers); err != nil {
 		return err
 	}
@@ -49,7 +52,7 @@ func processCSV(filename string) error {
 
 		start := time.Now()
 		score := credit_evaluation.CreditEvaluation(19, 100*1000*1000+1, float64(creditScore), dti)
-		elapsed := time.Since(start).Milliseconds()
+		elapsed := time.Since(start).Nanoseconds()
 
 		result := credit_evaluation.Sigmoid(score)
 
@@ -70,7 +73,7 @@ func processCSV(filename string) error {
 	return nil
 }
 
-func main() {
+func maidn() {
 	filename := "./test/credit-evaluation-test/credit_evaluation_test_data.csv"
 	if err := processCSV(filename); err != nil {
 		panic(err)

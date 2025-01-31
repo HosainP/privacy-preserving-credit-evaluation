@@ -32,7 +32,10 @@ func processCSV2(filename string, helper *encryption.CKKSHelper) error {
 	writer := csv.NewWriter(outputFile)
 	defer writer.Flush()
 
-	headers := append(records[0], "Encrypted Evaluation Score", "Encrypted Evaluation Result", "Evaluation Time (ms)")
+	headers := append(records[0],
+		"Encrypted Evaluation Score",
+		"Encrypted Evaluation Result",
+		"Evaluation Time (ns)")
 	if err := writer.Write(headers); err != nil {
 		return err
 	}
@@ -58,7 +61,7 @@ func processCSV2(filename string, helper *encryption.CKKSHelper) error {
 
 		// Decrypt the result
 		score := helper.Decrypt(resultEnc)
-		elapsed := time.Since(start).Milliseconds()
+		elapsed := time.Since(start).Nanoseconds()
 
 		result := credit_evaluation.Sigmoid(score)
 
@@ -78,7 +81,7 @@ func processCSV2(filename string, helper *encryption.CKKSHelper) error {
 	return nil
 }
 
-func mains() {
+func maing() {
 	helper := encryption.NewCKKSHelper()
 	filename := "./test/credit-evaluation-test/credit_evaluation_test_data.csv"
 	if err := processCSV2(filename, helper); err != nil {

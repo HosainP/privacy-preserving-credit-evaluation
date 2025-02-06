@@ -20,22 +20,41 @@ func main() {
 	mse := meanSquaredError(original, generated)
 
 	fmt.Println("Evaluation Score Report:")
-	fmt.Printf("Mean Absolute Error (MAE): %.4f\n", mae)
-	fmt.Printf("Mean Squared Error (MSE): %.4f\n", mse)
+	fmt.Printf("Mean Absolute Error (MAE): %.10f\n", mae)
+	fmt.Printf("Mean Squared Error (MSE): %.10f\n", mse)
 
 	///////
 
+	//original, generated, err = readColumns(filename, "Raw Evaluation Score", "Encrypted Evaluation Score")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//
+	//for i := 0; i < len(original); i++ {
+	//	if original[i] != generated[i] {
+	//		fmt.Printf("Original: %d - Generated: %d\n", original[i], generated[i])
+	//	}
+	//}
+	//
+	//fmt.Println("------------------")
+	//
 	original, generated, err = readColumns(filename, "Raw Evaluation Result", "Encrypted Evaluation Result")
 	if err != nil {
 		panic(err)
 	}
+	//
+	//for i := 0; i < len(original); i++ {
+	//	if original[i] != generated[i] {
+	//		fmt.Printf("Original: %d - Generated: %d\n", original[i], generated[i])
+	//	}
+	//}
 
 	mae = meanAbsoluteError(original, generated)
 	mse = meanSquaredError(original, generated)
 
 	fmt.Println("Evaluation Result Report:")
-	fmt.Printf("Mean Absolute Error (MAE): %.4f\n", mae)
-	fmt.Printf("Mean Squared Error (MSE): %.4f\n", mse)
+	fmt.Printf("Mean Absolute Error (MAE): %.10f\n", mae)
+	fmt.Printf("Mean Squared Error (MSE): %.10f\n", mse)
 
 	///////
 
@@ -45,6 +64,18 @@ func main() {
 	}
 
 	ratio, _ := averageRatio(original, generated)
+
+	sum := 0.0
+	for i := 0; i < len(original); i++ {
+		sum = sum + original[i]
+	}
+	println(sum / 200)
+
+	sum = 0.0
+	for i := 0; i < len(generated); i++ {
+		sum = sum + generated[i]
+	}
+	println(sum / 200)
 
 	fmt.Println("Average Time Ratio Report")
 	fmt.Printf("Average Time Ratio Report: %.4f\n", ratio)
@@ -136,4 +167,20 @@ func averageRatio(x, y []float64) (float64, error) {
 	}
 
 	return sum / float64(len(x)), nil
+}
+
+// Calculate Standard Deviation (SD)
+func standardDeviation(original, generated []float64) float64 {
+	if len(original) == 0 {
+		return 0
+	}
+
+	sum := 0.0
+	for i := range original {
+		diff := original[i] - generated[i]
+		sum += diff * diff
+	}
+
+	variance := sum / float64(len(original))
+	return math.Sqrt(variance)
 }

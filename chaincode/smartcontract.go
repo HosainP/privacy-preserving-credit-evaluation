@@ -66,6 +66,7 @@ func (s *SmartContract) CreateDocument(ctx contractapi.TransactionContextInterfa
 	if err != nil {
 		return "", err
 	}
+	id = "123456"
 	document.ID = id
 
 	documentJSON, err := json.Marshal(document)

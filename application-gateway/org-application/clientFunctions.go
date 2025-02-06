@@ -42,8 +42,9 @@ var now = time.Now()
 var assetId = fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
 
 type OrgApplication struct {
-	contract *client.Contract
-	signer   *encryption.Signer
+	contract   *client.Contract
+	signer     *encryption.Signer
+	ckksHelper *encryption.CKKSHelper
 }
 
 func NewOrgApplication() (*OrgApplication, error) {
@@ -86,9 +87,12 @@ func NewOrgApplication() (*OrgApplication, error) {
 	contract := network.GetContract(chaincodeName)
 
 	docSignPrKey, err := encryption.GenKey()
+
+	helper := encryption.NewCKKSHelper()
 	return &OrgApplication{
-		contract: contract,
-		signer:   encryption.NewSigner(docSignPrKey),
+		contract:   contract,
+		signer:     encryption.NewSigner(docSignPrKey),
+		ckksHelper: helper,
 	}, nil
 }
 
@@ -208,6 +212,8 @@ func (app OrgApplication) CreateDocument(document chaincode.Document) string {
 	}
 
 	currentTime := time.Now().Format(time.RFC3339)
+
+	fmt.Println(string(dataJSON))
 
 	documentId, err := app.contract.SubmitTransaction("CreateDocument",
 		document.OrgID,

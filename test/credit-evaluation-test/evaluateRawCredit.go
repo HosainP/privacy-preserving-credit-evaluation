@@ -73,7 +73,7 @@ func processCSV(filename string) error {
 	return nil
 }
 
-func maidn() {
+func mainsdfg() {
 	filename := "./test/credit-evaluation-test/credit_evaluation_test_data.csv"
 	if err := processCSV(filename); err != nil {
 		panic(err)

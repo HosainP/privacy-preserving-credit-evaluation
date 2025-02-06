@@ -14,7 +14,7 @@ func generateTestData(numSamples int) [][]string {
 
 	for i := 0; i < numSamples; i++ {
 		creditScore := rand.Intn(551) + 300
-		dti := rand.Float64()*0.5 + 0.1
+		dti := rand.Float64()*0.9 + 0.1
 		dtiStr := strconv.FormatFloat(dti, 'f', 2, 64)
 
 		data = append(data, []string{strconv.Itoa(creditScore), dtiStr})
@@ -47,8 +47,8 @@ func saveToCSV(data [][]string, filename string) error {
 	return nil
 }
 
-func mainv() {
-	testData := generateTestData(200)
+func mainasdf() {
+	testData := generateTestData(1000)
 
 	filename := "./test/credit-evaluation-test/credit_evaluation_test_data.csv"
 	if err := saveToCSV(testData, filename); err != nil {

@@ -81,7 +81,7 @@ func processCSV2(filename string, helper *encryption.CKKSHelper) error {
 	return nil
 }
 
-func maing() {
+func mainfds() {
 	helper := encryption.NewCKKSHelper()
 	filename := "./test/credit-evaluation-test/credit_evaluation_test_data.csv"
 	if err := processCSV2(filename, helper); err != nil {
